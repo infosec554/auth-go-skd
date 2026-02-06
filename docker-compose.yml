@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: auth_service
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_ENV=local
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=auth_db
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - auth-network
+    restart: always
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: auth_postgres
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=auth_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - auth-network
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: auth_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - auth-network
+    restart: always
+
+networks:
+  auth-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
