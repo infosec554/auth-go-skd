@@ -13,6 +13,7 @@ import (
 
 	"auth-go-skd/config"
 	httpApp "auth-go-skd/internal/http"
+	"auth-go-skd/internal/providers"
 	"auth-go-skd/internal/providers/google"
 	"auth-go-skd/internal/service"
 	"auth-go-skd/internal/storage/postgres"
@@ -48,13 +49,17 @@ func main() {
 	defer rds.Close()
 	sugar.Info("Connected to Redis")
 
-	googleProv := google.NewGoogleProvider(cfg.OAuth.Google)
+	// 4.5 Initialize Providers
+	authProviders := make(map[string]providers.Provider)
+	authProviders["google"] = google.NewGoogleProvider(cfg.OAuth.Google)
+	// Add more providers here: authProviders["github"] = ...
 
+	// 5. Initialize Service & Handler
 	authService := service.NewAuthService(
 		pg,
 		pg,
 		pg,
-		googleProv,
+		authProviders,
 		cfg,
 	)
 

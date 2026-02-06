@@ -17,10 +17,10 @@ import (
 
 type AuthService struct {
 	userStr     storage.UserStorage
-	sessionStr  storage.SessionStorage // Need to add to struct
+	sessionStr  storage.SessionStorage
 	identityStr storage.IdentityStorage
 	cfg         *config.Config
-	googleProv  providers.Provider // Interface for Google
+	providers   map[string]providers.Provider // Generic Map
 }
 
 type TokenPair struct {
@@ -35,14 +35,89 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func NewAuthService(u storage.UserStorage, s storage.SessionStorage, i storage.IdentityStorage, g providers.Provider, cfg *config.Config) *AuthService {
+func NewAuthService(u storage.UserStorage, s storage.SessionStorage, i storage.IdentityStorage, p map[string]providers.Provider, cfg *config.Config) *AuthService {
 	return &AuthService{
 		userStr:     u,
 		sessionStr:  s,
 		identityStr: i,
-		googleProv:  g,
+		providers:   p,
 		cfg:         cfg,
 	}
+}
+
+// ... (Existing methods Register, Login, Refresh, Logout, GetProfile, UpdateProfile, ChangePassword, DeleteAccount remain unchanged) ...
+
+// 12. Social Login (Generic)
+func (s *AuthService) GetAuthURL(providerName string) (string, error) {
+	p, ok := s.providers[providerName]
+	if !ok {
+		return "", errors.New("provider not supported")
+	}
+	return p.GetAuthURL("state-token"), nil // TODO: Generate random state
+}
+
+func (s *AuthService) SocialLogin(ctx context.Context, providerName string, code string, ua, ip string) (*TokenPair, error) {
+	// 1. Get Provider
+	p, ok := s.providers[providerName]
+	if !ok {
+		return nil, errors.New("provider not supported")
+	}
+
+	// 2. Fetch User from Provider
+	providerInfo, err := p.FetchUser(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Check if Identity exists
+	identity, err := s.identityStr.GetIdentityByProvider(ctx, providerName, providerInfo.ID)
+
+	var user *domain.User
+
+	if err == nil {
+		// Identity exists, get User
+		user, err = s.userStr.GetUserByID(ctx, identity.UserID)
+		if err != nil {
+			return nil, errors.New("user linked to identity not found")
+		}
+	} else {
+		// Identity does not exist. Check if user with same email exists.
+		user, err = s.userStr.GetUserByEmail(ctx, providerInfo.Email)
+		if err == nil {
+			// User exists, link identity
+			// (Pass through to create identity below)
+		} else {
+			// Create new user
+			user = &domain.User{
+				ID:         uuid.New().String(),
+				Email:      providerInfo.Email,
+				Name:       providerInfo.Name,
+				Role:       "user",
+				IsVerified: true, // Verified by Provider
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
+			}
+			if err := s.userStr.CreateUser(ctx, user); err != nil {
+				return nil, err
+			}
+		}
+
+		// Create Identity
+		identity = &domain.Identity{
+			ID:         uuid.New().String(),
+			UserID:     user.ID,
+			Provider:   providerName,
+			ProviderID: providerInfo.ID,
+			CreatedAt:  time.Now(),
+			LastLogin:  time.Now(),
+		}
+		if err := s.identityStr.CreateIdentity(ctx, identity); err != nil {
+			return nil, err
+		}
+	}
+
+	// 4. Login (Generate Tokens)
+	return s.generateTokens(ctx, user.ID, user.Role, ua, ip)
 }
 
 // 1. Register
@@ -209,67 +284,4 @@ func (s *AuthService) generateTokens(ctx context.Context, userID, role, ua, ip s
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
-}
-
-// 12. Social Login (Google)
-func (s *AuthService) GetGoogleAuthURL() string {
-	return s.googleProv.GetAuthURL("state-token") // TODO: Generate random state
-}
-
-func (s *AuthService) GoogleLogin(ctx context.Context, code string, ua, ip string) (*TokenPair, error) {
-	// 1. Fetch User from Google
-	providerInfo, err := s.googleProv.FetchUser(ctx, code)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. Check if Identity exists
-	identity, err := s.identityStr.GetIdentityByProvider(ctx, "google", providerInfo.ID)
-
-	var user *domain.User
-
-	if err == nil {
-		// Identity exists, get User
-		user, err = s.userStr.GetUserByID(ctx, identity.UserID)
-		if err != nil {
-			return nil, errors.New("user linked to identity not found")
-		}
-	} else {
-		// Identity does not exist. Check if user with same email exists.
-		user, err = s.userStr.GetUserByEmail(ctx, providerInfo.Email)
-		if err == nil {
-			// User exists, link identity
-			// (Pass through to create identity below)
-		} else {
-			// Create new user
-			user = &domain.User{
-				ID:         uuid.New().String(),
-				Email:      providerInfo.Email,
-				Name:       providerInfo.Name,
-				Role:       "user",
-				IsVerified: true, // Verified by Google
-				CreatedAt:  time.Now(),
-				UpdatedAt:  time.Now(),
-			}
-			if err := s.userStr.CreateUser(ctx, user); err != nil {
-				return nil, err
-			}
-		}
-
-		// Create Identity
-		identity = &domain.Identity{
-			ID:         uuid.New().String(),
-			UserID:     user.ID,
-			Provider:   "google",
-			ProviderID: providerInfo.ID,
-			CreatedAt:  time.Now(),
-			LastLogin:  time.Now(),
-		}
-		if err := s.identityStr.CreateIdentity(ctx, identity); err != nil {
-			return nil, err
-		}
-	}
-
-	// 3. Login (Generate Tokens)
-	return s.generateTokens(ctx, user.ID, user.Role, ua, ip)
 }

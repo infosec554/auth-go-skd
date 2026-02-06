@@ -50,9 +50,6 @@ func (h *Handler) InitRoutes() http.Handler {
 	// Public Routes
 	r.Get("/health", h.HealthCheck)
 
-	// Hosting Static Files (For Demo UI)
-	r.Handle("/*", http.FileServer(http.Dir("./public")))
-
 	// API Routes
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/register", h.Register)
@@ -61,8 +58,8 @@ func (h *Handler) InitRoutes() http.Handler {
 		r.Post("/logout", h.Logout)
 
 		// Social Auth
-		r.Get("/google/login", h.StartGoogleLogin)
-		r.Get("/google/callback", h.GoogleCallback)
+		r.Get("/{provider}/login", h.StartSocialLogin)
+		r.Get("/{provider}/callback", h.SocialCallback)
 	})
 
 	r.Route("/api/user", func(r chi.Router) {
@@ -206,28 +203,32 @@ func (h *Handler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 // 12. Social Auth Handlers
-func (h *Handler) StartGoogleLogin(w http.ResponseWriter, r *http.Request) {
-	url := h.authService.GetGoogleAuthURL()
+func (h *Handler) StartSocialLogin(w http.ResponseWriter, r *http.Request) {
+	provider := chi.URLParam(r, "provider")
+	url, err := h.authService.GetAuthURL(provider)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	// In a real app, you'd redirect. For API, we return the URL or redirect.
-	// Since this is JSON API mostly, let's return JSON, but for browser convenience let's redirect.
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-func (h *Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SocialCallback(w http.ResponseWriter, r *http.Request) {
+	provider := chi.URLParam(r, "provider")
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "Code not found", http.StatusBadRequest)
 		return
 	}
 
-	tokens, err := h.authService.GoogleLogin(r.Context(), code, r.UserAgent(), r.RemoteAddr)
+	tokens, err := h.authService.SocialLogin(r.Context(), provider, code, r.UserAgent(), r.RemoteAddr)
 	if err != nil {
 		h.logger.Error(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// For demo, we just print tokens or redirect to frontend with tokens in URL
-	// Simple for now: json
+	// For demo, we just print tokens or redirect
 	json.NewEncoder(w).Encode(tokens)
 }
