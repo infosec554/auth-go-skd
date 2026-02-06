@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -44,14 +45,36 @@ func (s *Service) callbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := r.URL.Query().Get("code")
+	// User fetched from provider
 	user, err := p.FetchUser(r.Context(), code)
 	if err != nil {
 		http.Error(w, "failed to login", http.StatusInternalServerError)
 		return
 	}
 
-	// TODO: Create JWT, set cookie
-	json.NewEncoder(w).Encode(user)
+	// Create JWT
+	tokenStr, err := s.Token(user)
+	if err != nil {
+		http.Error(w, "failed to create token", http.StatusInternalServerError)
+		return
+	}
+
+	// Set Cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "JWT",
+		Value:    tokenStr,
+		HttpOnly: true,
+		Path:     "/",
+		Expires:  time.Now().Add(s.opts.CookieDuration),
+	})
+
+	// Redirect or return JSON
+	// For SDK, usually redirects to frontend or returns JSON.
+	// Let's just return JSON for now as generic behavior
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"token": tokenStr,
+		"user":  user,
+	})
 }
 
 func (s *Service) logoutHandler(w http.ResponseWriter, r *http.Request) {

@@ -4,26 +4,22 @@
 ![Docker](https://img.shields.io/badge/docker-available-2496ED?style=flat&logo=docker)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A production-ready, standalone **Authentication Service (SDK)** built with Golang. It provides a secure, flexible, and scalable RESTful API for handling user authentication, session management, and social logins.
+A production-ready, standalone **Authentication SDK** built with Golang. It provides a secure, flexible, and scalable RESTful API logic for handling user authentication, session management, and social logins.
 
-Designed with **Clean Architecture** principles, making it easy to extend, test, and maintain.
+Designed as a **Library** (`go-pkgz/auth` style) to be easily integrated into any Go application (Chi, Gin, Stdlib).
 
 ---
 
 ## 🌟 Features
 
-### 🔐 Core Authentication
-- **Registration**: Secure user sign-up with bcrypt password hashing.
-- **Login**: JWT-based authentication (Access & Refresh Tokens).
-- **Session Management**: Secure token rotation and session tracking (Postgres/Redis backed).
-- **Logout**: Safe session invalidation.
+- **Framework Agnostic**: Works with `net/http` handlers and standard middleware.
+- **Provider Pattern**: Plug-and-play support for Google, GitHub, etc.
+- **Token Management**: Built-in JWT generation, validation, and Cookie management.
+- **Context Helper**: Easily retrieve user info in your handlers with `token.GetUserInfo(r)`.
+- **Avatar Storage**: Pluggable storage for user avatars (LocalFS, AWS S3, etc.).
 
-### 👤 User Management
-- **Profile Management**: Retrieve and update user details.
-- **Security**: Password change and account deletion functionalities.
-- **Roles**: Basic role-based access control (RBAC) ready.
+### 🌐 Supported Integrations (Roadmap)
 
-### 🌐 12 Planned Integrations
 Built with a **Pluggable Provider Pattern**, allowing for easy addition of new providers.
 
 | # | Integration | Status | Type | Description |
@@ -37,111 +33,74 @@ Built with a **Pluggable Provider Pattern**, allowing for easy addition of new p
 | 7️⃣ | **Microsoft (Azure AD)**| ⏳ *Pending* | OAuth 2.0 | Corporate / Office 365 SSO. |
 | 8️⃣ | **Apple Sign In** | ⏳ *Pending* | OIDC | Mandatory for iOS Apps (Privacy-first). |
 | 9️⃣ | **Telegram Login** | ⏳ *Pending* | Widget | Passwordless login via Telegram Messenger. |
-| 🔟 | **Twilio SMS OTP** | ⏳ *Pending* | OTP | Login via Phone Number (Passwordless). |
+| 1️⃣0️⃣| **Twilio SMS OTP** | ⏳ *Pending* | OTP | Login via Phone Number (Passwordless). |
 | 1️⃣1️⃣| **Email + Password** | ✅ **DONE** | Classic | Standard fallback login method. |
 | 1️⃣2️⃣| **Email Magic Link** | ⏳ *Pending* | Passwordless | Secure link sent to email for one-click login. |
 
 ---
 
-## 🛠 Tech Stack
+## 🚀 Installation
 
-- **Language**: Go (Golang) 1.22+
-- **Framework**: `chi` (Lightweight, idiomatic router)
-- **Database**: PostgreSQL (with `pgx` driver)
-- **Caching**: Redis (for session/rate limiting - optional)
-- **Config**: `cleanenv` (YAML + Environment variables)
-- **Migrations**: `golang-migrate`
-- **Logging**: `uber-go/zap` (Structured logging)
+```bash
+go get github.com/infosec554/auth-go-skd
+```
 
 ---
 
-## 🚀 Getting Started
+## 💻 Usage Example
 
-### Prerequisites
-- Go 1.22 or higher
-- Docker & Docker Compose
-- Make (optional, for convenience)
+Here is how to use `auth-go-skd` in your main application:
 
-### 1. Installation
+```go
+package main
 
-Clone the repository:
-```bash
-git clone https://github.com/infosec554/auth-go-skd.git
-cd auth-go-skd
+import (
+    "net/http"
+    "time"
+    
+    "github.com/go-chi/chi/v5"
+    "auth-go-skd/auth"
+    "auth-go-skd/avatar"
+    "auth-go-skd/token"
+    "auth-go-skd/provider/google"
+)
+
+func main() {
+    // 1. Configure the Service
+    opts := auth.Opts{
+        SecretReader: func(id string) (string, error) {
+            return "super-secret-key", nil
+        },
+        TokenDuration:  time.Minute * 15,
+        CookieDuration: time.Hour * 24,
+        Issuer:         "my-app",
+        URL:            "http://localhost:8080",
+        AvatarStore:    avatar.NewLocalFS("/tmp/avatars"),
+    }
+
+    // 2. Initialize Service & Providers
+    service := auth.NewService(opts)
+    service.AddCustomProvider(google.New(config.Google{...}))
+
+    // 3. Mount Handlers
+    r := chi.NewRouter()
+    authHandler, avatarHandler := service.Handlers()
+    r.Mount("/auth", authHandler)
+    r.Mount("/avatar", avatarHandler)
+
+    // 4. Protect Routes
+    m := service.Middleware()
+    r.Group(func(r chi.Router) {
+        r.Use(m.Auth)
+        r.Get("/private", func(w http.ResponseWriter, r *http.Request) {
+            user := token.MustGetUserInfo(r)
+            w.Write([]byte("Hello " + user.Name))
+        })
+    })
+
+    http.ListenAndServe(":8080", r)
+}
 ```
-
-### 2. Configuration
-
-Create a `.env` file in the root directory (or use `config/config.yaml`):
-
-```bash
-# App
-APP_NAME=auth-service
-APP_PORT=8080
-
-# Database
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5435
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=password
-POSTGRES_DB=auth_db
-
-# OAuth (Google)
-GOOGLE_CLIENT_ID=your_client_id
-GOOGLE_CLIENT_SECRET=your_client_secret
-GOOGLE_REDIRECT_URL=http://localhost:8080/api/auth/google/callback
-```
-
-### 3. Running the Service
-
-We provide a `Makefile` to simplify common tasks.
-
-**Option A: Using Docker (Recommended)**
-Start Postgres and Redis containers:
-```bash
-make docker-up
-```
-
-**Option B: Manual Run**
-Ensure Postgres is running locally, then apply migrations:
-```bash
-make migrate-up
-```
-Start the server:
-```bash
-make run
-```
-
-The server will be available at `http://localhost:8080`.
-
----
-
-## 📡 API Documentation
-
-### Authentication
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/auth/register` | Register a new user |
-| `POST` | `/api/auth/login` | Login with email/password |
-| `POST` | `/api/auth/refresh` | Refresh access token |
-| `POST` | `/api/auth/logout` | Logout user |
-
-### Social Auth
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/auth/{provider}/login` | Initiate generic OAuth login (e.g., /google/login) |
-| `GET` | `/api/auth/{provider}/callback` | OAuth callback handler |
-
-### User Profile (Protected)
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/user/profile/{id}` | Get user profile |
-| `PUT` | `/api/user/profile/{id}` | Update user profile |
-| `PUT` | `/api/user/change-password/{id}` | Change password |
-| `DELETE` | `/api/user/profile/{id}` | Delete account permanently |
 
 ---
 
@@ -149,17 +108,16 @@ The server will be available at `http://localhost:8080`.
 
 ```
 auth-go-skd/
-├── cmd/
-│   └── main.go            # Application entry point
-├── config/                # Environment configuration
-├── internal/
-│   ├── domain/            # Entities & Business Interfaces (Pure)
-│   ├── service/           # Business Logic Implementation
-│   ├── storage/           # Database Repositories (Postgres/Redis)
-│   ├── http/              # HTTP Handlers (REST Adapter)
-│   └── providers/         # OAuth Provider Implementations (Google, etc.)
-├── migrations/            # SQL Database Migrations
-└── docker-compose.yml     # Container orchestration
+├── auth/                  # Core Authentication Logic (Service, Handlers, Middleware)
+├── provider/              # OAuth Provider Interfaces & Implementations
+│   ├── google/            # Google Provider
+│   └── ...                # Other providers (Github, Facebook, etc.)
+├── token/                 # JWT Token Management & Context Helpers
+├── avatar/                # User Avatar Storage Layer
+├── store/                 # Storage Repositories (Postgres, Redis Interfaces)
+├── data/                  # Core Data Models (User, Session, Identity)
+├── config/                # Configuration Loader
+└── cmd/                   # Example Application entry point
 ```
 
 ## 🤝 Contributing

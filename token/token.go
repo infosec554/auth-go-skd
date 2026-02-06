@@ -1,8 +1,16 @@
 package token
 
 import (
+	"context"
+	"errors"
+	"net/http"
+
 	"github.com/golang-jwt/jwt/v5"
 )
+
+type contextKey string
+
+const userKey contextKey = "user"
 
 // SecretFunc returns the secret for the given ID
 type SecretFunc func(id string) (string, error)
@@ -34,4 +42,27 @@ type Validator interface {
 // Validate implements Validator interface
 func (f ValidatorFunc) Validate(token string, claims Claims) bool {
 	return f(token, claims)
+}
+
+// SetUserInfo sets the user info in the request context
+func SetUserInfo(r *http.Request, user User) *http.Request {
+	ctx := context.WithValue(r.Context(), userKey, user)
+	return r.WithContext(ctx)
+}
+
+// GetUserInfo retrieves the user info from the request context
+func GetUserInfo(r *http.Request) (User, error) {
+	if user, ok := r.Context().Value(userKey).(User); ok {
+		return user, nil
+	}
+	return User{}, errors.New("user info not found in context")
+}
+
+// MustGetUserInfo retrieves user info or panics
+func MustGetUserInfo(r *http.Request) User {
+	user, err := GetUserInfo(r)
+	if err != nil {
+		panic(err)
+	}
+	return user
 }
