@@ -4,7 +4,7 @@
 ![Docker](https://img.shields.io/badge/docker-available-2496ED?style=flat&logo=docker)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A production-ready, standalone **Authentication Service (SDK)** built with Golang. It provides a secure, flexible, and scalable RESTful API for handling user authentication, session management, and OAuth2 social logins.
+A production-ready, standalone **Authentication Service (SDK)** built with Golang. It provides a secure, flexible, and scalable RESTful API for handling user authentication, session management, and social logins.
 
 Designed with **Clean Architecture** principles, making it easy to extend, test, and maintain.
 
@@ -23,12 +23,23 @@ Designed with **Clean Architecture** principles, making it easy to extend, test,
 - **Security**: Password change and account deletion functionalities.
 - **Roles**: Basic role-based access control (RBAC) ready.
 
-### 🌐 Social Integrations (OAuth2)
-Built with a pluggable Provider Pattern. Currently supports:
-- [x] **Google**
-- [ ] GitHub (Ready to implement)
-- [ ] Facebook (Ready to implement)
-- [ ] ... and extensible for any OAuth2 provider.
+### 🌐 12 Planned Integrations
+Built with a **Pluggable Provider Pattern**, allowing for easy addition of new providers.
+
+| # | Integration | Status | Type | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| 1️⃣ | **Google OAuth** | ✅ **DONE** | OAuth 2.0 | Most popular login method. Fully implemented. |
+| 2️⃣ | **GitHub OAuth** | ⏳ *Pending* | OAuth 2.0 | Essential for developer-focused tools. |
+| 3️⃣ | **GitLab OAuth** | ⏳ *Pending* | OAuth 2.0 | For Enterprise / DevOps environments. |
+| 4️⃣ | **LinkedIn OAuth** | ⏳ *Pending* | OAuth 2.0 | B2B & HR platforms. |
+| 5️⃣ | **Facebook OAuth** | ⏳ *Pending* | OAuth 2.0 | General social media users. |
+| 6️⃣ | **Twitter (X) OAuth** | ⏳ *Pending* | OAuth 2.0 | Media & Community products. |
+| 7️⃣ | **Microsoft (Azure AD)**| ⏳ *Pending* | OAuth 2.0 | Corporate / Office 365 SSO. |
+| 8️⃣ | **Apple Sign In** | ⏳ *Pending* | OIDC | Mandatory for iOS Apps (Privacy-first). |
+| 9️⃣ | **Telegram Login** | ⏳ *Pending* | Widget | Passwordless login via Telegram Messenger. |
+| 🔟 | **Twilio SMS OTP** | ⏳ *Pending* | OTP | Login via Phone Number (Passwordless). |
+| 1️⃣1️⃣| **Email + Password** | ✅ **DONE** | Classic | Standard fallback login method. |
+| 1️⃣2️⃣| **Email Magic Link** | ⏳ *Pending* | Passwordless | Secure link sent to email for one-click login. |
 
 ---
 
