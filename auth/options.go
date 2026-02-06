@@ -10,6 +10,7 @@ import (
 // Opts configuration options for the auth service
 type Opts struct {
 	SecretReader   token.SecretFunc
+	Secret         string // Simplified single secret
 	TokenDuration  time.Duration
 	CookieDuration time.Duration
 	Issuer         string

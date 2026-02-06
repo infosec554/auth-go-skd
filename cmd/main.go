@@ -3,65 +3,53 @@ package main
 import (
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
 	"auth-go-skd/auth"
-	"auth-go-skd/avatar"
 	"auth-go-skd/config"
 	"auth-go-skd/provider/google"
 )
 
 func main() {
-	// 1. Load Config
+	// 1. Load Config (Optional, you can just hardcode strings for simple apps)
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	// 2. Setup Auth Options
-	opts := auth.Opts{
-		SecretReader: func(id string) (string, error) {
-			return "secret-key-change-me", nil
-		},
-		TokenDuration:  time.Minute * 15,
-		CookieDuration: time.Hour * 24,
-		Issuer:         cfg.App.Name,
-		URL:            "http://localhost:" + cfg.HTTP.Port,
-		AvatarStore:    avatar.NewLocalFS("/tmp/auth-avatars"),
-	}
+	// 2. Initialize Service (One-line setup)
+	service := auth.New(auth.Opts{
+		Secret: "super-secret-key-change-me",
+		URL:    "http://localhost:" + cfg.HTTP.Port,
+	})
 
-	// 3. Create Auth Service
-	service := auth.NewService(opts)
+	// 3. Add Providers
+	service.Add(google.New(
+		cfg.OAuth.Google.ClientID,
+		cfg.OAuth.Google.ClientSecret,
+		cfg.OAuth.Google.RedirectURL,
+	))
 
-	// 4. Add Providers
-	// Google
-	gProv := google.New(cfg.OAuth.Google)
-	service.AddCustomProvider(gProv)
-
-	// 5. Setup Router
+	// 4. Setup Router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
 
-	// 6. Mount Auth Handlers
-	authHandlers, avatarHandlers := service.Handlers()
-	r.Mount("/auth", authHandlers)
-	r.Mount("/avatar", avatarHandlers)
+	// Mount Auth Handlers (One-line mount)
+	authHandler, avatarHandler := service.Handlers()
+	r.Mount("/auth", authHandler)
+	r.Mount("/avatar", avatarHandler)
 
-	// 7. Protected Route Example
-	m := service.Middleware()
+	// 5. Protected Routes
 	r.Group(func(r chi.Router) {
-		r.Use(m.Auth)
+		r.Use(service.Middleware().Auth)
 		r.Get("/private", func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("You are authenticated!"))
+			user := auth.User(r)
+			w.Write([]byte("Hello " + user.Name))
 		})
 	})
 
 	log.Printf("Server listening on port %s", cfg.HTTP.Port)
-	if err := http.ListenAndServe(":"+cfg.HTTP.Port, r); err != nil {
-		log.Fatalf("server error: %v", err)
-	}
+	http.ListenAndServe(":"+cfg.HTTP.Port, r)
 }

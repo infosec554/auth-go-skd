@@ -1,7 +1,6 @@
 package google
 
 import (
-	"auth-go-skd/config"
 	"auth-go-skd/token"
 	"context"
 	"encoding/json"
@@ -15,12 +14,12 @@ type Provider struct {
 	config *oauth2.Config
 }
 
-func New(cfg config.Google) *Provider {
+func New(clientID, clientSecret, callbackURL string) *Provider {
 	return &Provider{
 		config: &oauth2.Config{
-			ClientID:     cfg.ClientID,
-			ClientSecret: cfg.ClientSecret,
-			RedirectURL:  cfg.RedirectURL,
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			RedirectURL:  callbackURL,
 			Scopes:       []string{"openid", "email", "profile"},
 			Endpoint:     google.Endpoint,
 		},
