@@ -15,7 +15,7 @@ Designed as a **Library** (`go-pkgz/auth` style) to be easily integrated into an
 - **Framework Agnostic**: Works with `net/http` handlers and standard middleware.
 - **Provider Pattern**: Plug-and-play support for Google, GitHub, etc.
 - **Token Management**: Built-in JWT generation, validation, and Cookie management.
-- **Context Helper**: Easily retrieve user info in your handlers with `token.GetUserInfo(r)`.
+- **Context Helper**: Easily retrieve user info in your handlers with `auth.User(r)`.
 - **Avatar Storage**: Pluggable storage for user avatars (LocalFS, AWS S3, etc.).
 
 ### 🌐 Supported Integrations (Roadmap)
@@ -56,44 +56,31 @@ package main
 
 import (
     "net/http"
-    "time"
     
     "github.com/go-chi/chi/v5"
     "auth-go-skd/auth"
-    "auth-go-skd/avatar"
-    "auth-go-skd/token"
     "auth-go-skd/provider/google"
 )
 
 func main() {
-    // 1. Configure the Service
-    opts := auth.Opts{
-        SecretReader: func(id string) (string, error) {
-            return "super-secret-key", nil
-        },
-        TokenDuration:  time.Minute * 15,
-        CookieDuration: time.Hour * 24,
-        Issuer:         "my-app",
-        URL:            "http://localhost:8080",
-        AvatarStore:    avatar.NewLocalFS("/tmp/avatars"),
-    }
+    // 1. Initialize Service (One-line setup with sensible defaults)
+    service := auth.New(auth.Opts{
+        Secret: "super-secret-key-change-me",
+        URL:    "http://localhost:8080",
+    })
 
-    // 2. Initialize Service & Providers
-    service := auth.NewService(opts)
-    service.AddCustomProvider(google.New(config.Google{...}))
+    // 2. Add Providers
+    service.Add(google.New("CLIENT_ID", "CLIENT_SECRET", "http://localhost:8080/auth/google/callback"))
 
     // 3. Mount Handlers
     r := chi.NewRouter()
-    authHandler, avatarHandler := service.Handlers()
-    r.Mount("/auth", authHandler)
-    r.Mount("/avatar", avatarHandler)
+    r.Mount("/auth", service.Handlers()) // Mounts login, callback, logout, etc.
 
     // 4. Protect Routes
-    m := service.Middleware()
     r.Group(func(r chi.Router) {
-        r.Use(m.Auth)
+        r.Use(service.Middleware().Auth)
         r.Get("/private", func(w http.ResponseWriter, r *http.Request) {
-            user := token.MustGetUserInfo(r)
+            user := auth.User(r) // Easy access to user info
             w.Write([]byte("Hello " + user.Name))
         })
     })
