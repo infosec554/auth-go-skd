@@ -15,6 +15,7 @@ type Opts struct {
 	CookieDuration time.Duration
 	Issuer         string
 	URL            string
+	URLIsHTTPS     bool // Enforce Secure cookies manually if not detected
 	AvatarStore    avatar.Store
 	Validator      token.Validator
 	DisableXSRF    bool
