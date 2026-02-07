@@ -6,7 +6,6 @@ import (
 	"path"
 )
 
-// LocalFS implements Store for local file system
 type LocalFS struct {
 	Location string
 }
@@ -17,7 +16,7 @@ func NewLocalFS(location string) *LocalFS {
 }
 
 func (l *LocalFS) Put(userID string, reader io.Reader) (avatar string, err error) {
-	// Simple implementation
+
 	avatar = userID + ".image"
 	file, err := os.Create(path.Join(l.Location, avatar))
 	if err != nil {

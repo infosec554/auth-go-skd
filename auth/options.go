@@ -7,15 +7,14 @@ import (
 	"auth-go-skd/token"
 )
 
-// Opts configuration options for the auth service
 type Opts struct {
 	SecretReader   token.SecretFunc
-	Secret         string // Simplified single secret
+	Secret         string
 	TokenDuration  time.Duration
 	CookieDuration time.Duration
 	Issuer         string
 	URL            string
-	URLIsHTTPS     bool // Enforce Secure cookies manually if not detected
+	URLIsHTTPS     bool
 	AvatarStore    avatar.Store
 	Validator      token.Validator
 	DisableXSRF    bool

@@ -1,4 +1,4 @@
-package google
+package github
 
 import (
 	"auth-go-skd/token"
@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"golang.org/x/oauth2"
-	googleOAuth "golang.org/x/oauth2/google"
+	githubOAuth "golang.org/x/oauth2/github"
 )
 
 type Provider struct {
@@ -20,14 +20,14 @@ func New(clientID, clientSecret, callbackURL string) *Provider {
 			ClientID:     clientID,
 			ClientSecret: clientSecret,
 			RedirectURL:  callbackURL,
-			Scopes:       []string{"openid", "email", "profile"},
-			Endpoint:     googleOAuth.Endpoint,
+			Scopes:       []string{"read:user", "user:email"},
+			Endpoint:     githubOAuth.Endpoint,
 		},
 	}
 }
 
 func (p *Provider) Name() string {
-	return "google"
+	return "github"
 }
 
 func (p *Provider) GetAuthURL(state string) string {
@@ -41,30 +41,53 @@ func (p *Provider) FetchUser(ctx context.Context, code string) (token.User, erro
 	}
 
 	client := p.Config.Client(ctx, tok)
-	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+	resp, err := client.Get("https://api.github.com/user")
 	if err != nil {
 		return token.User{}, fmt.Errorf("failed to get user info: %w", err)
 	}
 	defer resp.Body.Close()
 
 	var userInfo struct {
-		ID      string `json:"id"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Picture string `json:"picture"`
+		ID        int    `json:"id"`
+		Login     string `json:"login"`
+		Name      string `json:"name"`
+		Email     string `json:"email"`
+		AvatarURL string `json:"avatar_url"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		return token.User{}, fmt.Errorf("failed to decode user info: %w", err)
 	}
 
+	if userInfo.Email == "" {
+
+		emailResp, err := client.Get("https://api.github.com/user/emails")
+		if err == nil {
+			defer emailResp.Body.Close()
+			var emails []struct {
+				Email    string `json:"email"`
+				Primary  bool   `json:"primary"`
+				Verified bool   `json:"verified"`
+			}
+			if json.NewDecoder(emailResp.Body).Decode(&emails) == nil {
+				for _, email := range emails {
+					if email.Primary && email.Verified {
+						userInfo.Email = email.Email
+						break
+					}
+				}
+			}
+		}
+	}
+
 	return token.User{
-		ID:      userInfo.ID,
+		ID:      fmt.Sprintf("%d", userInfo.ID),
 		Name:    userInfo.Name,
 		Email:   userInfo.Email,
-		Picture: userInfo.Picture,
+		Picture: userInfo.AvatarURL,
 		Attributes: map[string]interface{}{
-			"provider": "google",
+			"username": userInfo.Login,
+			"provider": "github",
 		},
 	}, nil
 }
